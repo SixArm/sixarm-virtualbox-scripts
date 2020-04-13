@@ -11,6 +11,19 @@
 #
 #   * UTC time zone
 #
+#   * 20 GB drive
+#
+#   * 2 GB RAM
+#
+# This uses demo configurations:
+#
+#   * Username: demo
+#
+#   * Password: secret
+#
+#   * Hostname: demo.example.com
+#
+#
 # ## Related commands
 #
 # List vms:
