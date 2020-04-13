@@ -1,0 +1,98 @@
+#!/bin/sh
+
+##
+# Create a VirtualBox virtual machine
+#
+# This uses our preferred settings:
+#
+#   * Ubuntu current version
+#
+#   * United States English
+#
+#   * UTC time zone
+#
+# ## Related commands
+#
+# List vms:
+#
+#     vboxmanage list vms
+#
+# Delete a vm:
+#
+#     vboxmanage unregistervm <uuid> --delete
+#
+# Remove a vm that is inaccessible:
+#
+#     vboxmanage unregistervm <uuid>
+#
+# List drives:
+#
+#     vboxmanage list hdds
+#
+# Delete a drive:
+#
+#     vboxmanage closemedium <uuid> --delete  
+##
+
+vm_dir="$HOME/vm"
+name="ubuntu-19.10-desktop-amd64"
+iso="$HOME/iso/ubuntu-19.10-desktop-amd64.iso"
+
+VBoxManage createvm \
+--name "$name" \
+--ostype Ubuntu_64 \
+--register
+
+VBoxManage createmedium \
+--filename "$vm_dir/$name/$name.vdi" \
+--size 20480
+
+VBoxManage storagectl "$name" \
+--name SATA \
+--add SATA \
+--controller IntelAhci
+
+VBoxManage storageattach "$name" \
+--storagectl SATA \
+--port 0 \
+--device 0 \
+--type hdd \
+--medium "$vm_dir/$name/$name.vdi"
+
+VBoxManage storagectl "$name" \
+--name IDE \
+--add ide
+
+VBoxManage storageattach "$name" \
+--storagectl IDE \
+--port 0 \
+--device 0 \
+--type dvddrive \
+--medium "$iso"
+
+VBoxManage modifyvm "$name" \
+--memory 2048 \
+--vram 32
+
+VBoxManage modifyvm "$name" \
+--ioapic on
+
+VBoxManage modifyvm "$name" \
+--boot1 dvd \
+--boot2 disk \
+--boot3 none \
+--boot4 none
+
+VBoxManage modifyvm "$name" \
+--cpus 2
+
+VBoxManage unattended install "$name" \
+--user=demo \
+--password=secret \
+--country=US \
+--locale=en_US \
+--time-zone=UTC \
+--hostname=demo.example.com \
+--iso="$iso" \
+--start-vm=gui \
+--post-install-command="sudo apt-get -y update && sudo apt-get -y upgrade && sudo apt-get -y dist-upgrade"
