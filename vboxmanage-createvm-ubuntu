@@ -5,7 +5,7 @@
 #
 # This uses our preferred settings:
 #
-#   * Ubuntu current version
+#   * Ubuntu server current version
 #
 #   * United States English
 #
@@ -44,68 +44,169 @@
 #
 # Delete a drive:
 #
-#     vboxmanage closemedium <uuid> --delete  
+#     vboxmanage closemedium <uuid> --delete
+#
+#
+# ## Encryption
+#
+# Question: Are there performance and/or security advantages to using 
+# the VirtualBox Disk Encryption over Ubuntu disk encryption in the VM?
+#
+# Answer: As I understand it, a good point of the VirtualBox encryption is 
+# you can easily change your mind, encrypt a VM that isn't or decrypt a VM
+# which is, and use the result with VirtualBox. Making a decrypted image 
+# from an Ubuntu LUKS-encrypted one and vice-versa is likely possible but 
+# would be more complicated.
+#
+# Also, with the VirtualBox encryption you can store the encryption 
+# passphrase in the VB config outside of the VM, so you can boot the VM
+# without having to enter a decryption passphrase. Of course you have to
+# keep the VB config safe to avoid disclosure of the passphrase.
+#
+# Another benefit of using VirtualBox encryption is that you can securely
+# save the VM state to resume later. Encrypted VMs have their state file 
+# encrypted as well. In contrast, if you use Ubuntu full-disk encryption 
+# features of the guest, then saving the VM state will effectively leak 
+# the encryption key to the host's storage in the state file.
+#
+# See https://superuser.com/questions/1445735/virtualbox-disk-encryption-vs-ubuntu-vm-disk-encryption
+#
+# ## How to encrypt
+#
+# To support VirtualBox Disk Encryption of the virtual machine, you need 
+# to install VirtualBox Extension Pack, available at the VirtualBox site.
+# 
+# The Extension Pack is not included by default, because it can contain 
+# system level software that could be potentially harmful to your system.
+#
+# The version of Extension Pack needs to match your VirtualBox version.
+# So in case of installation issues, try to shut down all your VMs, then
+# then upgrade your VirtualBox.
+#
+# After you install Extension Pack, the encrypt operation can use the
+# command-line interface with this syntax:
+#
+#     VBoxManage encryptmedium "uuid|filename" \
+#     --newpassword "file|-" \
+#     --cipher "cipher id" \
+#     --newpasswordid "id"
+#
+# See https://superuser.com/questions/1072752/how-to-encrypt-vm-box-via-vboxmanage
+#
 ##
 
 vm_dir="$HOME/vm"
-name="ubuntu-19.10-desktop-amd64"
-iso="$HOME/iso/ubuntu-19.10-desktop-amd64.iso"
+iso_dir="$HOME/iso"
+vm="ubuntu-20.04-server-amd64"
+iso="ubuntu-20.04-live-server-amd64.iso"
+use_encryption=false
+use_auxiliary=true
+fix_debian_bug=true
+
+if [ "$use_auxiliary" = true ]; then
+	auxiliary_base_path="$iso_dir/${iso}-auxiliary/"
+	mkdir -p "$auxiliary_base_path"
+fi
 
 VBoxManage createvm \
---name "$name" \
+--name "$vm" \
 --ostype Ubuntu_64 \
 --register
 
 VBoxManage createmedium \
---filename "$vm_dir/$name/$name.vdi" \
+--filename "$vm_dir/$vm/$vm.vdi" \
 --size 20480
 
-VBoxManage storagectl "$name" \
+VBoxManage storagectl "$vm" \
 --name SATA \
 --add SATA \
 --controller IntelAhci
 
-VBoxManage storageattach "$name" \
+VBoxManage storageattach "$vm" \
 --storagectl SATA \
 --port 0 \
 --device 0 \
 --type hdd \
---medium "$vm_dir/$name/$name.vdi"
+--medium "$vm_dir/$vm/$vm.vdi"
 
-VBoxManage storagectl "$name" \
+VBoxManage storagectl "$vm" \
 --name IDE \
 --add ide
 
-VBoxManage storageattach "$name" \
+VBoxManage storageattach "$vm" \
 --storagectl IDE \
 --port 0 \
 --device 0 \
 --type dvddrive \
---medium "$iso"
+--medium "$iso_dir/$iso"
 
-VBoxManage modifyvm "$name" \
+VBoxManage modifyvm "$vm" \
 --memory 2048 \
 --vram 32
 
-VBoxManage modifyvm "$name" \
+VBoxManage modifyvm "$vm" \
 --ioapic on
 
-VBoxManage modifyvm "$name" \
+VBoxManage modifyvm "$vm" \
 --boot1 dvd \
 --boot2 disk \
 --boot3 none \
 --boot4 none
 
-VBoxManage modifyvm "$name" \
+# TODO: research how to create nics.
+#
+# VBoxManage modifyvm "$vm" \
+# --nic1 bridged \
+# --bridgeadapter1 wlan0 \
+# --nic2 nat \
+
+VBoxManage modifyvm "$vm" \
 --cpus 2
 
-VBoxManage unattended install "$name" \
---user=demo \
---password=secret \
---country=US \
---locale=en_US \
---time-zone=UTC \
---hostname=demo.example.com \
---iso="$iso" \
---start-vm=gui \
---post-install-command="sudo apt-get -y update && sudo apt-get -y upgrade && sudo apt-get -y dist-upgrade"
+if [ "$use_encryption" = true ]; then
+	password_dir="$iso_dir/${iso}-extras/"
+	password_file="virtualbox-demo-password"
+	mkdir -p "$password_dir"
+	echo "000000000000000000000000000000" > "$password_dir/$password_file"
+	VBoxManage encryptmedium "$vm_dir/$vm/$vm.vdi" \
+	--newpassword "$password_dir/$password_file" \
+	--cipher "AES-XTS256-PLAIN64" \
+	--newpasswordid "demo"
+fi
+
+if [ "$use_auxiliary" = true ]; then
+	VBoxManage unattended install "$vm" \
+	--auxiliary-base-path="$auxiliary_base_path" \
+	--iso="$iso" \
+	--user=user \
+	--password=secret \
+	--country=US \
+	--locale=en_US \
+	--time-zone=UTC \
+	--hostname=demo.example.com \
+	--post-install-command="sudo apt-get -y update && sudo apt-get -y upgrade && sudo apt-get -y dist-upgrade"
+else
+	VBoxManage unattended install "$vm" \
+	--iso="$iso" \
+	--user=user \
+	--password=secret \
+	--country=US \
+	--locale=en_US \
+	--time-zone=UTC \
+	--hostname=demo.example.com \
+	--post-install-command="sudo apt-get -y update && sudo apt-get -y upgrade && sudo apt-get -y dist-upgrade"
+fi
+
+# Fix Debian Stretch bug by changing the setup from wrong 
+# interactive menu installation to headless installation.
+# See https://www.virtualbox.org/ticket/18410
+if [ "$fix_debian_bug" = true ]; then
+	# TODO solve this
+	# cp "${auxiliary_base_path}isolinux-txt.cfg" "${auxiliary_base_path}isolinux-txt.cfg.orig"
+	# auxiliary_patch_file="$HOME/tmp/patch.diff"
+	#patch "${auxiliary_base_path}isolinux-txt.cfg" < "${auxiliary_patch_file}"
+	#cp "$HOME/tmp/isolinux-txt.cfg" "${auxiliary_base_path}isolinux-txt.cfg" 
+	#sed -i.orig 's/^default vesa.*/default live-install/' "${auxiliary_base_path}isolinux-isolinux.cfg"
+fi
+
+VBoxManage startvm "$vm"
