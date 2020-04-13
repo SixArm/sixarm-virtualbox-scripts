@@ -47,6 +47,18 @@
 #     vboxmanage closemedium <uuid> --delete
 #
 #
+# ## Formats for disks
+#
+# We typically use these formats:
+#
+#   * VMDK: VMWare uses VMDK as the default disk image format.
+#     Multipe VMDK versions and variations exist, so it’s important
+#     to understand which one you’re using and where it can be used.
+#
+#   * VDI: VirtualBox uses VDI as the default disk image format.
+#     VDI is not compatible with VMWare
+#
+#
 # ## Encryption
 #
 # Question: Are there performance and/or security advantages to using 
@@ -93,12 +105,20 @@
 #
 # See https://superuser.com/questions/1072752/how-to-encrypt-vm-box-via-vboxmanage
 #
+# ## Other resources
+#
+# https://spin.atomicobject.com/2013/06/03/ovf-virtual-machine/
+#
+# https://github.com/jedi4ever/veewee
+#
 ##
 
 vm_dir="$HOME/vm"
 iso_dir="$HOME/iso"
 vm="ubuntu-20.04-server-amd64"
+dd="ubuntu-20.04-server-amd64.vmdk"
 iso="ubuntu-20.04-live-server-amd64.iso"
+
 use_encryption=false
 use_auxiliary=true
 fix_debian_bug=true
@@ -114,7 +134,7 @@ VBoxManage createvm \
 --register
 
 VBoxManage createmedium \
---filename "$vm_dir/$vm/$vm.vdi" \
+--filename "$vm_dir/$vm/$dd" \
 --size 20480
 
 VBoxManage storagectl "$vm" \
@@ -127,7 +147,7 @@ VBoxManage storageattach "$vm" \
 --port 0 \
 --device 0 \
 --type hdd \
---medium "$vm_dir/$vm/$vm.vdi"
+--medium "$vm_dir/$vm/$dd"
 
 VBoxManage storagectl "$vm" \
 --name IDE \
@@ -165,10 +185,10 @@ VBoxManage modifyvm "$vm" \
 
 if [ "$use_encryption" = true ]; then
 	password_dir="$iso_dir/${iso}-extras/"
-	password_file="virtualbox-demo-password"
+	password_file="virtualbox-password"
 	mkdir -p "$password_dir"
-	echo "000000000000000000000000000000" > "$password_dir/$password_file"
-	VBoxManage encryptmedium "$vm_dir/$vm/$vm.vdi" \
+	echo "secret" > "$password_dir/$password_file"
+	VBoxManage encryptmedium "$vm_dir/$vm/$dd" \
 	--newpassword "$password_dir/$password_file" \
 	--cipher "AES-XTS256-PLAIN64" \
 	--newpasswordid "demo"
