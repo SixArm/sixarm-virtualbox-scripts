@@ -1,9 +1,38 @@
 #!/bin/sh
+set -euf
 
 ##
 # Create a VirtualBox virtual machine
 #
-# This uses our preferred settings:
+# Syntax:
+#
+#     vboxmanage-createvm-ubuntu <iso path> <vm path>
+#
+# Example:
+#
+#     vboxmanage-createvm-ubuntu \
+#     $HOME/iso/ubuntu-20.04-live-server-amd64.iso \
+#     $HOME/vm/ubuntu-20.04-server-amd64
+#
+# The ISO path can be wherever you have the ISO file.
+#
+# The VM path is typically within your existing VirtualBox
+# virtual machine path, because this program will create the
+# disk drive file within that directory.
+#
+#
+# ## Settings
+#
+# This program uses our preferred settings, and you can
+# edit this program to use the settings that you want. 
+#
+# The purpose of these settings is to do a simple setup
+# for new users, akin to a tutorial that is easy to change.
+# This program is not attempting to be a full featured
+# installation such as with all settings configurable via
+# command line options.
+#
+# This program uses our organization's configuration:
 #
 #   * Ubuntu server current version
 #
@@ -15,13 +44,15 @@
 #
 #   * 2 GB RAM
 #
-# This uses demo configurations:
+# This program uses example configurations:
 #
-#   * Username: demo
+#   * Name: User
+#
+#   * Username: user
 #
 #   * Password: secret
 #
-#   * Hostname: demo.example.com
+#   * Server name: example
 #
 #
 # ## Related commands
@@ -113,20 +144,61 @@
 #
 ##
 
-vm_dir="$HOME/vm"
-iso_dir="$HOME/iso"
-vm="ubuntu-20.04-server-amd64"
-dd="ubuntu-20.04-server-amd64.vmdk"
-iso="ubuntu-20.04-live-server-amd64.iso"
+## Input ISO path and VM path
 
+iso_path="${1:-$HOME/iso/ubuntu-20.04-live-server-amd64.iso}"
+vm_path="${2:-$HOME/vm/ubuntu-20.04-server-amd64}"
+
+iso=$(basename "$iso_path")
+iso_dir=$(dirname "$iso_path")
+
+vm=$(basename "$vm_path")
+vm_dir=$(dirname "$vm_path")
+
+## Helpers from sixarm-unix-shell-scripts
+
+# out: print output message to stdout
+out() { printf %s\\n "$*" ; }
+
+# err: print error message to stderr
+err() { >&2 printf %s\\n "$*" ; }
+
+# die: print error message to stderr, then exit with error code 1
+die() { >&2 printf %s\\n "$*" ; exit 1 ; }
+
+## Preflight
+
+[ -f "$iso_path" ] || die "Cannot find ISO file: $iso_path"
+[ -d "$vm_dir" ] || die "Cannot find VM directory: $vm_dir"
+
+## Configuration - you might want to change these
+
+# Disk drive: we prefer the disk drive format VMDK versus VDI
+dd="$vm.vmdk"
+
+# Use encryption: we prefer this off because we want flexibility
 use_encryption=false
-use_auxiliary=true
-fix_debian_bug=true
+
+# Use auxiliary: this is a work in progress for the debian bug
+use_auxiliary=false
+
+# Fix Debian bug: this is a work in progress for Ubuntu server
+fix_debian_bug=false
+
+# If we're installing the server, then we need to deal with the
+# Debian bug, so we need to use an auxiliary directory somewhere.
+# We prefer creating the directory alongside the ISO file, because
+# we want to easily see the config files that the ISO is creating,
+# and we also want to keep the files so we have a record of the work.
+# Other developers may prefer to put the auxiliary directory into
+# a temporary directory and delete the directory after installation.
 
 if [ "$use_auxiliary" = true ]; then
-	auxiliary_base_path="$iso_dir/${iso}-auxiliary/"
+	auxiliary_base_path="$iso_path.auxiliary/"
 	mkdir -p "$auxiliary_base_path"
 fi
+
+## Create the VM
 
 VBoxManage createvm \
 --name "$vm" \
@@ -134,7 +206,7 @@ VBoxManage createvm \
 --register
 
 VBoxManage createmedium \
---filename "$vm_dir/$vm/$dd" \
+--filename "$vm_path/$dd" \
 --size 20480
 
 VBoxManage storagectl "$vm" \
@@ -147,7 +219,7 @@ VBoxManage storageattach "$vm" \
 --port 0 \
 --device 0 \
 --type hdd \
---medium "$vm_dir/$vm/$dd"
+--medium "$vm_path/$dd"
 
 VBoxManage storagectl "$vm" \
 --name IDE \
@@ -158,7 +230,7 @@ VBoxManage storageattach "$vm" \
 --port 0 \
 --device 0 \
 --type dvddrive \
---medium "$iso_dir/$iso"
+--medium "$iso_path"
 
 VBoxManage modifyvm "$vm" \
 --memory 2048 \
@@ -184,12 +256,10 @@ VBoxManage modifyvm "$vm" \
 --cpus 2
 
 if [ "$use_encryption" = true ]; then
-	password_dir="$iso_dir/${iso}-extras/"
-	password_file="virtualbox-password"
-	mkdir -p "$password_dir"
-	echo "secret" > "$password_dir/$password_file"
+	password_path="$iso_path.password.txt"
+	echo "secret" > "$password_path"
 	VBoxManage encryptmedium "$vm_dir/$vm/$dd" \
-	--newpassword "$password_dir/$password_file" \
+	--newpassword "$password_path" \
 	--cipher "AES-XTS256-PLAIN64" \
 	--newpasswordid "demo"
 fi
@@ -197,7 +267,7 @@ fi
 if [ "$use_auxiliary" = true ]; then
 	VBoxManage unattended install "$vm" \
 	--auxiliary-base-path="$auxiliary_base_path" \
-	--iso="$iso" \
+	--iso="$iso_path" \
 	--user=user \
 	--password=secret \
 	--country=US \
@@ -207,7 +277,7 @@ if [ "$use_auxiliary" = true ]; then
 	--post-install-command="sudo apt-get -y update && sudo apt-get -y upgrade && sudo apt-get -y dist-upgrade"
 else
 	VBoxManage unattended install "$vm" \
-	--iso="$iso" \
+	--iso="$iso_path" \
 	--user=user \
 	--password=secret \
 	--country=US \
@@ -220,13 +290,17 @@ fi
 # Fix Debian Stretch bug by changing the setup from wrong 
 # interactive menu installation to headless installation.
 # See https://www.virtualbox.org/ticket/18410
+#
+# This is needed for Ubuntu server, not for Ubuntu desktop.
+#
+# TODO: this currently doesn't work -- we welcome advice!
+
 if [ "$fix_debian_bug" = true ]; then
-	# TODO solve this
-	# cp "${auxiliary_base_path}isolinux-txt.cfg" "${auxiliary_base_path}isolinux-txt.cfg.orig"
-	# auxiliary_patch_file="$HOME/tmp/patch.diff"
-	#patch "${auxiliary_base_path}isolinux-txt.cfg" < "${auxiliary_patch_file}"
-	#cp "$HOME/tmp/isolinux-txt.cfg" "${auxiliary_base_path}isolinux-txt.cfg" 
-	#sed -i.orig 's/^default vesa.*/default live-install/' "${auxiliary_base_path}isolinux-isolinux.cfg"
+	cp "${auxiliary_base_path}isolinux-txt.cfg" "${auxiliary_base_path}isolinux-txt.cfg.orig"
+	auxiliary_patch_file="$HOME/tmp/patch.diff"
+	patch "${auxiliary_base_path}isolinux-txt.cfg" < "${auxiliary_patch_file}"
+	cp "$HOME/tmp/isolinux-txt.cfg" "${auxiliary_base_path}isolinux-txt.cfg" 
+	sed -i.orig 's/^default vesa.*/default live-install/' "${auxiliary_base_path}isolinux-isolinux.cfg"
 fi
 
 VBoxManage startvm "$vm"
