@@ -144,6 +144,9 @@ set -euf
 #
 ##
 
+# Include https://github.com/SixArm/posix-shell-script-kit
+. "$(dirname "$(readlink -f "$0")")/posix-shell-script-kit"
+
 ## Input ISO path and VM path
 
 iso_path="${1:-$HOME/iso/ubuntu-20.04-live-server-amd64.iso}"
@@ -154,17 +157,6 @@ iso_dir=$(dirname "$iso_path")
 
 vm=$(basename "$vm_path")
 vm_dir=$(dirname "$vm_path")
-
-## Helpers from sixarm-unix-shell-scripts
-
-# out: print output message to stdout
-out() { printf %s\\n "$*" ; }
-
-# err: print error message to stderr
-err() { >&2 printf %s\\n "$*" ; }
-
-# die: print error message to stderr, then exit with error code 1
-die() { >&2 printf %s\\n "$*" ; exit 1 ; }
 
 ## Preflight
 
