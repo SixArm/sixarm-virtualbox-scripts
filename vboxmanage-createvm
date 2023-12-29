@@ -2,23 +2,48 @@
 set -euf
 
 ##
-# Create a VirtualBox virtual machine
+# Create a VirtualBox virtual machine for Ubuntu.
 #
 # Syntax:
 #
-#     vboxmanage-createvm-ubuntu <iso path> <vm path>
+#     vboxmanage-createvm-ubuntu <nickname>
 #
-# Example:
+#     vboxmanage-createvm-ubuntu <os type> <iso path> <vm path> <post install command>
 #
-#     vboxmanage-createvm-ubuntu \
-#     $HOME/iso/ubuntu-20.04-live-server-amd64.iso \
-#     $HOME/vm/ubuntu-20.04-server-amd64
+# Examples of the nickname syntax:
+#
+#     vboxmanage-createvm debian
+#     vboxmanage-createvm ubuntu
+#     vboxmanage-createvm oracle
+#
+# Example extended syntax and Debian Linux:
+#
+#     vboxmanage-createvm \
+#	  Debian12_64 \
+#     debian-12.4.0-arm64-DVD-1.iso \
+#     debian-12.4.0-arm64
+#
+# Example extended syntax and Ubuntu Linux:
+#
+#     vboxmanage-createvm \
+#	  Ubuntu_64 \
+#     ubuntu-22.04-live-server-amd64.iso \
+#     ubuntu-22.04-server-amd64 \
+#
+# Example extended syntax and Oracle Linux:
+#
+#     vboxmanage-createvm \
+#     Oracle9_64 \
+#     OracleLinux-R9-U3-aarch64-dvd.iso \
+#     oracle-linux-r9-u3-aarch64
 #
 # The ISO path can be wherever you have the ISO file.
 #
 # The VM path is typically within your existing VirtualBox
 # virtual machine path, because this program will create the
 # disk drive file within that directory.
+#
+# The OS type must be one of the VirtualBox known OS types.
 #
 #
 # ## Settings
@@ -32,9 +57,7 @@ set -euf
 # installation such as with all settings configurable via
 # command line options.
 #
-# This program uses our organization's configuration:
-#
-#   * Ubuntu server current version
+# This program uses our preferred example configuration:
 #
 #   * United States English
 #
@@ -42,9 +65,9 @@ set -euf
 #
 #   * 20 GB drive
 #
-#   * 2 GB RAM
+#   * 4 GB RAM
 #
-# This program uses example configurations:
+# This program uses our preferred example configurations:
 #
 #   * Name: User
 #
@@ -52,105 +75,45 @@ set -euf
 #
 #   * Password: secret
 #
-#   * Server name: example
+#   * Domain name: example.com
 #
-#
-# ## Related commands
-#
-# List vms:
-#
-#     vboxmanage list vms
-#
-# Delete a vm:
-#
-#     vboxmanage unregistervm <uuid> --delete
-#
-# Remove a vm that is inaccessible:
-#
-#     vboxmanage unregistervm <uuid>
-#
-# List drives:
-#
-#     vboxmanage list hdds
-#
-# Delete a drive:
-#
-#     vboxmanage closemedium <uuid> --delete
-#
-#
-# ## Formats for disks
-#
-# We typically use these formats:
-#
-#   * VMDK: VMWare uses VMDK as the default disk image format.
-#     Multipe VMDK versions and variations exist, so it’s important
-#     to understand which one you’re using and where it can be used.
-#
-#   * VDI: VirtualBox uses VDI as the default disk image format.
-#     VDI is not compatible with VMWare
-#
-#
-# ## Encryption
-#
-# Question: Are there performance and/or security advantages to using 
-# the VirtualBox Disk Encryption over Ubuntu disk encryption in the VM?
-#
-# Answer: As I understand it, a good point of the VirtualBox encryption is 
-# you can easily change your mind, encrypt a VM that isn't or decrypt a VM
-# which is, and use the result with VirtualBox. Making a decrypted image 
-# from an Ubuntu LUKS-encrypted one and vice-versa is likely possible but 
-# would be more complicated.
-#
-# Also, with the VirtualBox encryption you can store the encryption 
-# passphrase in the VB config outside of the VM, so you can boot the VM
-# without having to enter a decryption passphrase. Of course you have to
-# keep the VB config safe to avoid disclosure of the passphrase.
-#
-# Another benefit of using VirtualBox encryption is that you can securely
-# save the VM state to resume later. Encrypted VMs have their state file 
-# encrypted as well. In contrast, if you use Ubuntu full-disk encryption 
-# features of the guest, then saving the VM state will effectively leak 
-# the encryption key to the host's storage in the state file.
-#
-# See https://superuser.com/questions/1445735/virtualbox-disk-encryption-vs-ubuntu-vm-disk-encryption
-#
-# ## How to encrypt
-#
-# To support VirtualBox Disk Encryption of the virtual machine, you need 
-# to install VirtualBox Extension Pack, available at the VirtualBox site.
-# 
-# The Extension Pack is not included by default, because it can contain 
-# system level software that could be potentially harmful to your system.
-#
-# The version of Extension Pack needs to match your VirtualBox version.
-# So in case of installation issues, try to shut down all your VMs, then
-# then upgrade your VirtualBox.
-#
-# After you install Extension Pack, the encrypt operation can use the
-# command-line interface with this syntax:
-#
-#     VBoxManage encryptmedium "uuid|filename" \
-#     --newpassword "file|-" \
-#     --cipher "cipher id" \
-#     --newpasswordid "id"
-#
-# See https://superuser.com/questions/1072752/how-to-encrypt-vm-box-via-vboxmanage
-#
-# ## Other resources
-#
-# https://spin.atomicobject.com/2013/06/03/ovf-virtual-machine/
-#
-# https://github.com/jedi4ever/veewee
-#
+#   * Host name: demo.example.com
 ##
 
-# Include https://github.com/SixArm/posix-shell-script-kit
-. "$(dirname "$(readlink -f "$0")")/posix-shell-script-kit"
+# Include https://github.com/SixArm/unix-shell-script-kit
+. "$(dirname "$(readlink -f "$0")")/unix-shell-script-kit"
+
+## Parse nicknames
+
+case "$1" in
+   	debian)
+		os_type="Debian12_64"
+		iso_path="$HOME/iso/debian-12.4.0-arm64-DVD-1.iso"
+		vm_path="$HOME/vm/debian-12.4.0-arm64"
+		post_install_command="sudo apt-get -y update; sudo apt-get -y upgrade; sudo apt-get -y dist-upgrade"
+		fix_debian_bug=true
+      	;;
+   	oracle)
+		os_type="Oracle9_64"
+		iso_path="$HOME/iso/OracleLinux-R9-U3-aarch64-dvd.iso"
+		vm_path="$HOME/vm/oracle-linux-r9-u3-aarch"
+		post_install_command="sudo dnf --assumeyes autoremove; sudo dnf --assumeyes upgrade; sudo dnf --assumeyes autoremovesudo; sudo dnf install -y dnf-automatic; sudo systemctl enable --now dnf-automatic.timer; sudo systemctl enable --now dnf-automatic-install.timer"
+      	;;
+	ubuntu)
+		os_type="Ubuntu_64"
+		iso_path="$HOME/iso/ubuntu-20.04-live-server-amd64.iso"
+		vm_path="$HOME/vm/ubuntu-20.04-server-amd64"
+		post_install_command="sudo apt-get -y update; sudo apt-get -y upgrade; sudo apt-get -y dist-upgrade"
+		fix_debian_bug=true
+      	;;
+   *)
+		os_type="$1"
+		iso_path="$2"
+		vm_path="$3"
+	;;
+esac
 
 ## Input ISO path and VM path
-
-iso_path="${1:-$HOME/iso/ubuntu-20.04-live-server-amd64.iso}"
-vm_path="${2:-$HOME/vm/ubuntu-20.04-server-amd64}"
 
 iso=$(basename "$iso_path")
 iso_dir=$(dirname "$iso_path")
@@ -163,16 +126,37 @@ vm_dir=$(dirname "$vm_path")
 [ -f "$iso_path" ] || die "Cannot find ISO file: $iso_path"
 [ -d "$vm_dir" ] || die "Cannot find VM directory: $vm_dir"
 
-## Configuration - you might want to change these
+## Settings
+
+## Configuration - you may want to change these to your preferences
 
 # Disk drive: we prefer the disk drive format VMDK versus VDI
-dd="$vm.vmdk"
+dd="${dd:=$vm.vmdk}"
+
+# Random Access Memory (RAM) in MB
+memory="${memory:=4096}"
+
+# Visual Random Access Memory (VRAM) in MB
+vram="${vram:=32}"
+
+# Drive disk size in MB
+medium_size="${medium_size:=20480}"
 
 # Use encryption: we prefer this off because we want flexibility
-use_encryption=false
+use_encryption="${use_encryption:=false}"
 
-# Use auxiliary: this is a work in progress for the debian bug
-use_auxiliary=false
+# Use auxiliary: this is a work in progress for the Debian bug
+use_auxiliary="${use_auxiliary:=false}"
+
+out "os_type: $os_type"
+out "iso: $iso"
+out "vm: $vm"
+out "dd: $dd"
+out "memory: $memory"
+out "vram: $vram"
+out "medium_size: $medium_size"
+out "use_encryption: $use_encryption"
+out "use_auxiliary: $use_auxiliary"
 
 # Fix Debian bug: this is a work in progress for Ubuntu server
 fix_debian_bug=false
@@ -194,12 +178,12 @@ fi
 
 VBoxManage createvm \
 --name "$vm" \
---ostype Ubuntu_64 \
+--ostype "$os_type" \
 --register
 
 VBoxManage createmedium \
 --filename "$vm_path/$dd" \
---size 20480
+--size "$medium_size"
 
 VBoxManage storagectl "$vm" \
 --name SATA \
@@ -225,8 +209,8 @@ VBoxManage storageattach "$vm" \
 --medium "$iso_path"
 
 VBoxManage modifyvm "$vm" \
---memory 2048 \
---vram 32
+--memory "$memory" \
+--vram "$vram"
 
 VBoxManage modifyvm "$vm" \
 --ioapic on
@@ -266,7 +250,7 @@ if [ "$use_auxiliary" = true ]; then
 	--locale=en_US \
 	--time-zone=UTC \
 	--hostname=demo.example.com \
-	--post-install-command="sudo apt-get -y update && sudo apt-get -y upgrade && sudo apt-get -y dist-upgrade"
+	--post-install-command="$post_install_command"
 else
 	VBoxManage unattended install "$vm" \
 	--iso="$iso_path" \
@@ -276,7 +260,7 @@ else
 	--locale=en_US \
 	--time-zone=UTC \
 	--hostname=demo.example.com \
-	--post-install-command="sudo apt-get -y update && sudo apt-get -y upgrade && sudo apt-get -y dist-upgrade"
+	--post-install-command="$post_install_command"
 fi
 
 # Fix Debian Stretch bug by changing the setup from wrong 
